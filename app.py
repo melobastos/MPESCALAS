@@ -3,8 +3,8 @@ import pandas as pd
 import calendar
 from datetime import datetime
 
-# Função para gerar a escala
-def gerar_escala(mes, ano, funcionarios):
+# Função para gerar a escala considerando exceções
+def gerar_escala(mes, ano, funcionarios, excecoes):
     dias_uteis = []
     
     # Identificar os dias úteis do mês
@@ -13,16 +13,28 @@ def gerar_escala(mes, ano, funcionarios):
             dias_uteis.append(dia)
     
     escala = []
-    turno = ["Matutino", "Vespertino"]
     
     i = 0  # Índice para alternar os funcionários
-    for idx, dia in enumerate(dias_uteis):
+    for dia in dias_uteis:
+        turno_matutino = None
+        turno_vespertino = None
+        
+        # Encontrar funcionários disponíveis para cada turno
+        disponiveis = [f for f in funcionarios if f not in excecoes.get((dia, "Matutino"), [])]
+        if disponiveis:
+            turno_matutino = disponiveis[i % len(disponiveis)]
+            i += 1
+        
+        disponiveis = [f for f in funcionarios if f not in excecoes.get((dia, "Vespertino"), [])]
+        if disponiveis:
+            turno_vespertino = disponiveis[i % len(disponiveis)]
+            i += 1
+        
         escala.append({
             "Data": f"{dia}/{mes}/{ano}",
-            "Turno": turno[idx % 2],
-            "Funcionário": funcionarios[i % len(funcionarios)]
+            "Turno Matutino": turno_matutino,
+            "Turno Vespertino": turno_vespertino
         })
-        i += 1
     
     return pd.DataFrame(escala)
 
@@ -37,11 +49,26 @@ ano = st.selectbox("Selecione o ano", list(range(datetime.today().year, datetime
 funcionarios_input = st.text_area("Digite os nomes dos funcionários (um por linha)")
 funcionarios = [f.strip() for f in funcionarios_input.split("\n") if f.strip()]
 
+# Inserção de exceções
+st.subheader("Exceções")
+excecoes = {}
+if funcionarios:
+    for funcionario in funcionarios:
+        st.write(f"Exceções para {funcionario}:")
+        datas_excecoes = st.text_input(f"Digite as datas que {funcionario} não pode trabalhar (formato: dia, separado por vírgula)", key=f"data_{funcionario}")
+        turnos_excecoes = st.multiselect(f"Turnos que {funcionario} não pode trabalhar", ["Matutino", "Vespertino"], key=f"turno_{funcionario}")
+        
+        if datas_excecoes:
+            datas_excecoes = [int(d.strip()) for d in datas_excecoes.split(",") if d.strip().isdigit()]
+            for data in datas_excecoes:
+                for turno in turnos_excecoes:
+                    excecoes.setdefault((data, turno), []).append(funcionario)
+
 if st.button("Gerar Escala"):
     if not funcionarios:
         st.warning("Por favor, insira pelo menos um funcionário.")
     else:
-        escala_df = gerar_escala(mes, ano, funcionarios)
+        escala_df = gerar_escala(mes, ano, funcionarios, excecoes)
         st.dataframe(escala_df)
         
         # Permitir download da escala
