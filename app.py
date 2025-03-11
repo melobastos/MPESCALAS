@@ -3,9 +3,6 @@ import pandas as pd
 import calendar
 from datetime import datetime, date
 import altair as alt
-import io
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 # Configuração da página
 st.set_page_config(
@@ -72,79 +69,6 @@ def gerar_escala(mes, ano, funcionarios, excecoes, considerar_carga=True):
     })
     
     return df, estatisticas
-
-# Função para exportar para Excel com formatação
-def exportar_excel(df, estatisticas, mes, ano):
-    output = io.BytesIO()
-    workbook = Workbook()
-    
-    # Primeira aba - Escala
-    ws_escala = workbook.active
-    ws_escala.title = "Escala"
-    
-    # Adicionar título
-    ws_escala.merge_cells('A1:D1')
-    ws_escala['A1'] = f"Escala de Trabalho - {calendar.month_name[mes]} de {ano}"
-    ws_escala['A1'].font = Font(bold=True, size=14)
-    ws_escala['A1'].alignment = Alignment(horizontal='center')
-    
-    # Adicionar cabeçalhos
-    headers = ["Data", "Dia da Semana", "Turno Matutino", "Turno Vespertino"]
-    for col, header in enumerate(headers, start=1):
-        cell = ws_escala.cell(row=2, column=col, value=header)
-        cell.font = Font(bold=True)
-        cell.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
-    
-    # Adicionar dados
-    for i, row in df.iterrows():
-        ws_escala.cell(row=i+3, column=1, value=row["Data"])
-        ws_escala.cell(row=i+3, column=2, value=row["Dia da Semana"])
-        ws_escala.cell(row=i+3, column=3, value=row["Turno Matutino"])
-        ws_escala.cell(row=i+3, column=4, value=row["Turno Vespertino"])
-    
-    # Ajustar largura das colunas
-    for col in ws_escala.columns:
-        max_length = 0
-        for cell in col:
-            if cell.value:
-                max_length = max(max_length, len(str(cell.value)))
-        adjusted_width = max_length + 2
-        ws_escala.column_dimensions[col[0].column_letter].width = adjusted_width
-    
-    # Segunda aba - Estatísticas
-    ws_stats = workbook.create_sheet(title="Estatísticas")
-    
-    # Adicionar título
-    ws_stats.merge_cells('A1:B1')
-    ws_stats['A1'] = "Estatísticas de Alocação"
-    ws_stats['A1'].font = Font(bold=True, size=14)
-    ws_stats['A1'].alignment = Alignment(horizontal='center')
-    
-    # Adicionar cabeçalhos
-    ws_stats['A2'] = "Funcionário"
-    ws_stats['B2'] = "Total de Turnos"
-    ws_stats['A2'].font = Font(bold=True)
-    ws_stats['B2'].font = Font(bold=True)
-    ws_stats['A2'].fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
-    ws_stats['B2'].fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
-    
-    # Adicionar dados
-    for i, row in estatisticas.iterrows():
-        ws_stats.cell(row=i+3, column=1, value=row["Funcionário"])
-        ws_stats.cell(row=i+3, column=2, value=row["Total de Turnos"])
-    
-    # Ajustar largura das colunas
-    for col in ws_stats.columns:
-        max_length = 0
-        for cell in col:
-            if cell.value:
-                max_length = max(max_length, len(str(cell.value)))
-        adjusted_width = max_length + 2
-        ws_stats.column_dimensions[col[0].column_letter].width = adjusted_width
-    
-    workbook.save(output)
-    output.seek(0)
-    return output
 
 # Interface do Streamlit
 st.title("🗓️ Gerador de Escala de Trabalho")
@@ -229,25 +153,14 @@ with col2:
                 with tab1:
                     st.dataframe(escala_df, use_container_width=True)
                     
-                    # Opções de download
-                    col_csv, col_excel = st.columns(2)
-                    with col_csv:
-                        csv = escala_df.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            label="📄 Baixar como CSV",
-                            data=csv,
-                            file_name=f"escala_{mes}_{ano}.csv",
-                            mime="text/csv"
-                        )
-                    
-                    with col_excel:
-                        excel_data = exportar_excel(escala_df, estatisticas_df, mes, ano)
-                        st.download_button(
-                            label="📊 Baixar como Excel",
-                            data=excel_data,
-                            file_name=f"escala_{mes}_{ano}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
+                    # Opção de download de CSV
+                    csv = escala_df.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        label="📄 Baixar como CSV",
+                        data=csv,
+                        file_name=f"escala_{mes}_{ano}.csv",
+                        mime="text/csv"
+                    )
                 
                 with tab2:
                     st.subheader("Distribuição de turnos por funcionário")
@@ -308,3 +221,6 @@ with col2:
                     )
                     
                     st.altair_chart(heatmap + text, use_container_width=True)
+                    
+                    # Adicionar legenda de turnos
+                    st.info("**Matutino**: Turno da manhã | **Vespertino**: Turno da tarde")
