@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 # Função para gerar a escala considerando exceções e alocações fixas
-def gerar_escala(mes, ano, funcionarios, excecoes, alocacoes_fixas, restricoes_turnos, considerar_carga=True):
+def gerar_escala(mes, ano, funcionarios, excecoes, alocacoes_fixas, considerar_carga=True):
     # Dicionário para controlar a carga de trabalho de cada funcionário
     carga_trabalho = {f: 0 for f in funcionarios}
     
@@ -77,16 +77,12 @@ def gerar_escala(mes, ano, funcionarios, excecoes, alocacoes_fixas, restricoes_t
             excepcao_turno_matutino = funcionario in excecoes.get('turnos', {}).get((dia, 'Matutino'), [])
             excepcao_turno_vespertino = funcionario in excecoes.get('turnos', {}).get((dia, 'Vespertino'), [])
             
-            # Verificar restrições de turno global
-            restricao_turno_matutino = 'Matutino' in restricoes_turnos.get(funcionario, [])
-            restricao_turno_vespertino = 'Vespertino' in restricoes_turnos.get(funcionario, [])
-            
-            # Adicionar às listas de disponíveis se não tiver exceções e restrições
-            if not excepcao_dia and not excepcao_intervalo and not excepcao_dia_semana and not excepcao_turno_matutino and not restricao_turno_matutino:
+            # Adicionar às listas de disponíveis se não tiver exceções
+            if not excepcao_dia and not excepcao_intervalo and not excepcao_dia_semana and not excepcao_turno_matutino:
                 if not turno_matutino:  # Se não tiver alocação fixa
                     disponiveis_matutino.append(funcionario)
                     
-            if not excepcao_dia and not excepcao_intervalo and not excepcao_dia_semana and not excepcao_turno_vespertino and not restricao_turno_vespertino:
+            if not excepcao_dia and not excepcao_intervalo and not excepcao_dia_semana and not excepcao_turno_vespertino:
                 if not turno_vespertino:  # Se não tiver alocação fixa
                     disponiveis_vespertino.append(funcionario)
         
@@ -177,12 +173,9 @@ with col2:
         'dias_especificos': {}  # Alocações fixas para dias específicos
     }
     
-    # Nova estrutura para restrições de turnos
-    restricoes_turnos = {}
-    
     if funcionarios:
-        # Tabs para separar exceções, alocações fixas e restrições de turnos
-        tab_excecoes, tab_fixas, tab_restricoes = st.tabs(["Exceções", "Alocações Fixas", "Restrições de Turnos"])
+        # Tabs para separar exceções e alocações fixas
+        tab_excecoes, tab_fixas = st.tabs(["Exceções", "Alocações Fixas"])
         
         with tab_excecoes:
             st.subheader("Configurar Exceções")
@@ -288,3 +281,144 @@ with col2:
                     with col1:
                         if st.checkbox("Segunda", key=f"seg_fixo_{funcionario}"):
                             dias_semana_fixos.append(0)
+                    with col2:
+                        if st.checkbox("Terça", key=f"ter_fixo_{funcionario}"):
+                            dias_semana_fixos.append(1)
+                    with col3:
+                        if st.checkbox("Quarta", key=f"qua_fixo_{funcionario}"):
+                            dias_semana_fixos.append(2)
+                    with col4:
+                        if st.checkbox("Quinta", key=f"qui_fixo_{funcionario}"):
+                            dias_semana_fixos.append(3)
+                    with col5:
+                        if st.checkbox("Sexta", key=f"sex_fixo_{funcionario}"):
+                            dias_semana_fixos.append(4)
+                    
+                    # Alocações fixas por turno
+                    st.write("Turnos com alocação fixa:")
+                    turnos_fixos = []
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.checkbox("Matutino", key=f"mat_fixo_{funcionario}"):
+                            turnos_fixos.append("Matutino")
+                    with col2:
+                        if st.checkbox("Vespertino", key=f"ves_fixo_{funcionario}"):
+                            turnos_fixos.append("Vespertino")
+                    
+                    if dias_semana_fixos and turnos_fixos:
+                        alocacoes_fixas['dia_semana'][funcionario] = {
+                            'dias': dias_semana_fixos,
+                            'turnos': turnos_fixos
+                        }
+                    
+                    st.divider()
+                    
+                    # Alocações fixas por dias específicos
+                    dias_fixos = st.text_input(
+                        f"Dias específicos com alocação fixa (ex: 1, 2, 15)",
+                        key=f"dias_fixos_{funcionario}"
+                    )
+                    
+                    # Turnos fixos para dias específicos
+                    turnos_dias_fixos = st.multiselect(
+                        f"Turnos fixos para os dias especificados",
+                        ["Matutino", "Vespertino"],
+                        key=f"turnos_dias_fixos_{funcionario}"
+                    )
+                    
+                    if dias_fixos and turnos_dias_fixos:
+                        try:
+                            dias_fixos_list = [int(d.strip()) for d in dias_fixos.split(",") if d.strip().isdigit()]
+                            alocacoes_fixas['dias_especificos'][funcionario] = {
+                                'dias': dias_fixos_list,
+                                'turnos': turnos_dias_fixos
+                            }
+                        except ValueError:
+                            st.error(f"Formato inválido para os dias fixos de {funcionario}")
+
+    # Botão para gerar escala
+    if st.button("Gerar Escala", type="primary"):
+        if not funcionarios:
+            st.warning("Por favor, insira pelo menos um funcionário.")
+        else:
+            with st.spinner("Gerando escala..."):
+                escala_df, estatisticas_df = gerar_escala(mes, ano, funcionarios, excecoes, alocacoes_fixas, equilibrar_carga)
+                
+                # Mostrar resultados em tabs
+                tab1, tab2, tab3 = st.tabs(["Escala", "Estatísticas", "Visualização"])
+                
+                with tab1:
+                    st.dataframe(escala_df, use_container_width=True)
+                    
+                    # Opção de download de CSV
+                    csv = escala_df.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        label="📄 Baixar como CSV",
+                        data=csv,
+                        file_name=f"escala_{mes}_{ano}.csv",
+                        mime="text/csv"
+                    )
+                
+                with tab2:
+                    st.subheader("Distribuição de turnos por funcionário")
+                    st.dataframe(estatisticas_df, use_container_width=True)
+                    
+                    # Gráfico de barras para visualizar distribuição de turnos
+                    chart = alt.Chart(estatisticas_df).mark_bar().encode(
+                        x=alt.X('Funcionário', sort='-y'),
+                        y=alt.Y('Total de Turnos'),
+                        color=alt.Color('Funcionário', legend=None)
+                    ).properties(
+                        height=300
+                    )
+                    st.altair_chart(chart, use_container_width=True)
+                
+                with tab3:
+                    st.subheader("Visualização da Escala")
+                    
+                    # Preparar dados para visualização do calendário
+                    cal_data = []
+                    for i, row in escala_df.iterrows():
+                        data = row['Data']
+                        dia = int(data.split('/')[0])
+                        cal_data.append({
+                            'Dia': dia,
+                            'Turno': 'Matutino',
+                            'Funcionário': row['Turno Matutino'] or '-'
+                        })
+                        cal_data.append({
+                            'Dia': dia,
+                            'Turno': 'Vespertino',
+                            'Funcionário': row['Turno Vespertino'] or '-'
+                        })
+                    
+                    cal_df = pd.DataFrame(cal_data)
+                    
+                    # Criar um heatmap da escala
+                    heatmap = alt.Chart(cal_df).mark_rect().encode(
+                        x=alt.X('Dia:O', title='Dia do Mês'),
+                        y=alt.Y('Turno:N', title=None),
+                        color=alt.Color('Funcionário:N', legend=alt.Legend(orient='bottom')),
+                        tooltip=['Dia', 'Turno', 'Funcionário']
+                    ).properties(
+                        title=f"Escala de {calendar.month_name[mes]} de {ano}",
+                        width=600
+                    )
+                    
+                    # Adicionar rótulos
+                    text = alt.Chart(cal_df).mark_text().encode(
+                        x=alt.X('Dia:O'),
+                        y=alt.Y('Turno:N'),
+                        text='Funcionário',
+                        color=alt.condition(
+                            alt.datum.Funcionário == '-',
+                            alt.value('red'),
+                            alt.value('white')
+                        )
+                    )
+                    
+                    st.altair_chart(heatmap + text, use_container_width=True)
+                    
+                    # Adicionar legenda de turnos
+                    st.info("**Matutino**: Turno da manhã | **Vespertino**: Turno da tarde")
