@@ -288,4 +288,3 @@ with col2:
                     with col1:
                         if st.checkbox("Segunda", key=f"seg_fixo_{funcionario}"):
                             dias_semana_fixos.append(0)
-                    with col2:
